@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Request a Target · DAP Object Catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:    #07070a;
+    --bg2:   #0c0c10;
+    --bg3:   #111116;
+    --bg4:   #17171e;
+    --border:  rgba(212,170,80,0.12);
+    --border2: rgba(212,170,80,0.25);
+    --text:  #f5ecd4;
+    --text2: #a89060;
+    --text3: #5a4a28;
+    --gold:    #d4aa50;
+    --gold2:   #b8892e;
+    --gold3:   #f0cc78;
+    --green:   #7ec87a;
+    --red:     #c86060;
+    --mono:    'Space Mono', monospace;
+    --display: 'Times New Roman', Times, Georgia, serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  /* Subtle starfield */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(245,236,212,0.45), transparent 50%),
+      radial-gradient(1px 1px at 70% 60%, rgba(245,236,212,0.35), transparent 50%),
+      radial-gradient(1px 1px at 40% 80%, rgba(245,236,212,0.4), transparent 50%),
+      radial-gradient(1px 1px at 85% 15%, rgba(245,236,212,0.3), transparent 50%),
+      radial-gradient(1px 1px at 10% 70%, rgba(245,236,212,0.35), transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h1 {
+    font-size: 32px;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+
+  .sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+
+  .intro {
+    color: var(--text2);
+    margin-top: 16px;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 32px;
+  }
+
+  .field {
+    margin-bottom: 22px;
+  }
+
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 8px;
+  }
+
+  label .req {
+    color: var(--gold);
+    margin-left: 4px;
+  }
+
+  label .hint {
+    font-family: var(--display);
+    font-size: 12px;
+    color: var(--text3);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 8px;
+    font-style: italic;
+  }
+
+  input[type="text"],
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: border-color 0.15s;
+  }
+
+  input[type="text"]:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 80px;
+    font-family: var(--display);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .lookup-row {
+    display: flex; gap: 10px; align-items: stretch;
+  }
+  .lookup-row input { flex: 1; }
+  .lookup-btn {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 0 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .lookup-btn:hover { border-color: var(--gold); background: rgba(212,170,80,0.08); }
+  .lookup-btn:disabled { opacity: 0.5; cursor: wait; }
+
+  .lookup-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 6px;
+    min-height: 14px;
+  }
+  .lookup-status.ok  { color: var(--green); }
+  .lookup-status.err { color: var(--red);   }
+
+  .submit-row {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .submit-btn {
+    background: var(--gold);
+    color: var(--bg);
+    border: none;
+    padding: 12px 28px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .submit-btn:hover  { background: var(--gold3); }
+  .submit-btn:disabled { opacity: 0.5; cursor: wait; }
+
+  .status-msg {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text3);
+  }
+  .status-msg.ok  { color: var(--green); }
+  .status-msg.err { color: var(--red); }
+
+  .success-card {
+    background: var(--bg2);
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    padding: 40px;
+    text-align: center;
+    display: none;
+  }
+  .success-card.show { display: block; }
+  .success-card h2 {
+    color: var(--green);
+    font-size: 22px;
+    margin-bottom: 12px;
+  }
+  .success-card p {
+    color: var(--text2);
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .success-card .again {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--gold);
+    padding: 10px 20px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .success-card .again:hover { border-color: var(--gold); }
+
+  footer {
+    margin-top: 40px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 600px) {
+    .row { grid-template-columns: 1fr; }
+    .panel { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Request a Target</h1>
+    <div class="sub">DAP Object Catalog · Texas Tech University</div>
+    <p class="intro">
+      Submit an astronomical target for consideration. Required fields are marked.
+      Use the SIMBAD lookup to auto-fill coordinates from the target name.
+    </p>
+  </header>
+
+  <div class="panel" id="formPanel">
+
+    <div class="field">
+      <label>Target name <span class="req">*</span> <span class="hint">e.g. NGC 6946, M51, HD 189733</span></label>
+      <div class="lookup-row">
+        <input type="text" id="targetName" autocomplete="off" placeholder="">
+        <button type="button" class="lookup-btn" id="lookupBtn">Lookup in SIMBAD</button>
+      </div>
+      <div class="lookup-status" id="lookupStatus"></div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>RA <span class="req">*</span></label>
+        <input type="text" id="ra" placeholder="20h 34m 52.3s">
+      </div>
+      <div class="field">
+        <label>Dec <span class="req">*</span></label>
+        <input type="text" id="dec" placeholder="+60° 09′ 14″">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Your name <span class="req">*</span></label>
+        <input type="text" id="authorName" autocomplete="name">
+      </div>
+      <div class="field">
+        <label>Affiliation <span class="hint">department, institution</span></label>
+        <input type="text" id="affiliation" placeholder="TTU · PHAS">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Equipment / exposure request <span class="hint">optional</span></label>
+      <input type="text" id="equipment" placeholder="e.g. 4 hr LRGB, V + B photometry, monitoring cadence">
+    </div>
+
+    <div class="field">
+      <label>Timing <span class="hint">when does this need to happen</span></label>
+      <input type="text" id="timing" placeholder="e.g. ASAP, before March 2026, weekly cadence">
+    </div>
+
+    <div class="field">
+      <label>Justification <span class="hint">why this target, what's the science case</span></label>
+      <textarea id="justification" rows="4" placeholder="Brief reason for the request — science motivation, transient candidate, follow-up of a published result, etc."></textarea>
+    </div>
+
+    <div class="submit-row">
+      <span class="status-msg" id="statusMsg"></span>
+      <button type="button" class="submit-btn" id="submitBtn">Submit Request</button>
+    </div>
+
+  </div>
+
+  <div class="success-card" id="successCard">
+    <h2>✓ Request Submitted</h2>
+    <p id="successText">Thank you. Your request has been recorded and will appear in the catalog's pending queue.</p>
+    <button type="button" class="again" id="againBtn">Submit Another</button>
+  </div>
+
+  <footer>
+    DAP Object Catalog · Department of Physics &amp; Astronomy · Texas Tech University
+  </footer>
+
+</div>
+
+<script>
+'use strict';
+
+// Same Cloudflare Worker proxy your main catalog uses
+const SIMBAD_PROXY = 'https://simbad-proxy.battlefield-dp.workers.dev/';
+
+const $ = id => document.getElementById(id);
+
+function setLookupStatus(text, kind) {
+  const el = $('lookupStatus');
+  el.textContent = text;
+  el.className = 'lookup-status' + (kind ? ' ' + kind : '');
+}
+function setSubmitStatus(text, kind) {
+  const el = $('statusMsg');
+  el.textContent = text;
+  el.className = 'status-msg' + (kind ? ' ' + kind : '');
+}
+
+// ── SIMBAD lookup ─────────────────────────────────────────────────
+async function lookupSimbad() {
+  const name = $('targetName').value.trim();
+  if (!name) {
+    setLookupStatus('Enter a target name first.', 'err');
+    return;
+  }
+  const btn = $('lookupBtn');
+  btn.disabled = true;
+  setLookupStatus('Looking up ' + name + '…');
+
+  // sim-script POST: ask SIMBAD for main id + sexagesimal coords
+  const script = [
+    'format object form1 "%IDLIST(1) | %COO(:;A) | %COO(:;D)"',
+    'query id ' + name,
+  ].join('\n');
+
+  try {
+    const resp = await fetch(SIMBAD_PROXY + 'simbad/sim-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'script=' + encodeURIComponent(script),
+    });
+    const txt = await resp.text();
+    // Look for the ::data:::: line
+    const m = txt.match(/::data::+\s*([\s\S]+?)(?:\n\n|$)/);
+    if (!m) throw new Error('SIMBAD returned no usable data');
+    const dataBlock = m[1].trim().split('\n').filter(l => l.includes('|'))[0];
+    if (!dataBlock) throw new Error('No coordinates returned');
+    const parts = dataBlock.split('|').map(s => s.trim());
+    const mainId = parts[0] || name;
+    const raStr = parts[1] || '';
+    const decStr = parts[2] || '';
+    if (!raStr || !decStr) throw new Error('Coordinates missing in response');
+    // SIMBAD returns "HH:MM:SS.s" and "+DD:MM:SS.s" — convert to your display format
+    $('ra').value  = raStr.replace(/:/g, (m, i, s) => {
+      const cnt = (s.slice(0, i).match(/:/g) || []).length;
+      return cnt === 0 ? 'h ' : (cnt === 1 ? 'm ' : 's');
+    }) + (raStr.endsWith('s') ? '' : 's');
+    $('dec').value = decStr.replace(/:/, '° ').replace(/:/, '′ ') + '″';
+    setLookupStatus('✓ Resolved: ' + mainId, 'ok');
+  } catch (e) {
+    setLookupStatus('Error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Submit ────────────────────────────────────────────────────────
+async function submitRequest() {
+  const payload = {
+    name:         $('targetName').value.trim(),
+    ra:           $('ra').value.trim(),
+    dec:          $('dec').value.trim(),
+    author: {
+      name:        $('authorName').value.trim(),
+      affiliation: $('affiliation').value.trim(),
+    },
+    request:       $('equipment').value.trim(),
+    timing:        $('timing').value.trim(),
+    justification: $('justification').value.trim(),
+  };
+
+  if (!payload.name)         { setSubmitStatus('Target name is required.', 'err'); return; }
+  if (!payload.author.name)  { setSubmitStatus('Your name is required.', 'err'); return; }
+  if (!payload.ra || !payload.dec) {
+    setSubmitStatus('Coordinates required — use SIMBAD lookup or enter manually.', 'err'); return;
+  }
+
+  const btn = $('submitBtn');
+  btn.disabled = true;
+  setSubmitStatus('Submitting…');
+
+  try {
+    const resp = await fetch('requests.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    // Success — swap panels
+    $('formPanel').style.display = 'none';
+    $('successCard').classList.add('show');
+    $('successText').textContent =
+      'Thank you, ' + (payload.author.name.split(/\s+/)[0]) + '. ' +
+      payload.name + ' has been added to the pending queue.';
+  } catch (e) {
+    setSubmitStatus('Submission failed: ' + e.message, 'err');
+    btn.disabled = false;
+  }
+}
+
+function resetForm() {
+  ['targetName','ra','dec','authorName','affiliation','equipment','timing','justification']
+    .forEach(id => { $(id).value = ''; });
+  setLookupStatus('', '');
+  setSubmitStatus('', '');
+  $('formPanel').style.display = '';
+  $('successCard').classList.remove('show');
+  $('submitBtn').disabled = false;
+  $('targetName').focus();
+}
+
+// ── Wire up ───────────────────────────────────────────────────────
+$('lookupBtn').addEventListener('click', lookupSimbad);
+$('submitBtn').addEventListener('click', submitRequest);
+$('againBtn').addEventListener('click', resetForm);
+$('targetName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); lookupSimbad(); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+═══════════════════════════════════════════════════════════════════════
+  index.html  —  patch for PHP-backed pending targets
+═══════════════════════════════════════════════════════════════════════
+
+Five small edits. All line numbers refer to your current index.html.
+Apply them in order. After this, your page reads/writes pending targets
+to requests.php on myweb instead of localStorage.
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 1 — Replace loadPulseRequests + savePulseRequests (lines 14930–14947)
+─────────────────────────────────────────────────────────────────────────
+
+FIND this block:
+
+    // Ephemeral requests data — stored separately from objects[].
+    // For now, primed from localStorage; external /request form writes
+    // into this same key once that system exists.
+    let pulseRequests = [];
+
+    function loadPulseRequests() {
+      try {
+        const raw = localStorage.getItem('DAP_requests_v1');
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) pulseRequests = arr;
+        }
+      } catch (e) { pulseRequests = []; }
+    }
+
+    function savePulseRequests() {
+      try { localStorage.setItem('DAP_requests_v1', JSON.stringify(pulseRequests)); } catch (e) {}
+    }
+
+REPLACE with:
+
+    // Pending-target requests — stored server-side in requests.json via requests.php.
+    // Collaborators submit via request.html on the same host.
+    let pulseRequests = [];
+    const REQUESTS_ENDPOINT = 'requests.php';
+
+    async function loadPulseRequests() {
+      try {
+        const resp = await fetch(REQUESTS_ENDPOINT, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const arr = await resp.json();
+        if (Array.isArray(arr)) pulseRequests = arr;
+      } catch (e) {
+        console.warn('loadPulseRequests failed:', e);
+        // Keep whatever we already had; don't blow away the array on a transient error
+      }
+    }
+
+    // No-op kept for callers; mutations now go through specific endpoints.
+    function savePulseRequests() { /* server-side now */ }
+
+    // Update a request's status on the server (approve / decline)
+    async function updateRequestStatus(id, status, extra) {
+      try {
+        const body = Object.assign({ id, status }, extra || {});
+        const resp = await fetch(REQUESTS_ENDPOINT + '?action=status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || ('HTTP ' + resp.status));
+        }
+        return true;
+      } catch (e) {
+        alert('Could not update request on server: ' + e.message);
+        return false;
+      }
+    }
+
+    // One-time migration: push any old localStorage requests to the server.
+    // Safe to leave in — server dedupes by id, so re-running does nothing.
+    async function migrateLocalRequests() {
+      try {
+        const raw = localStorage.getItem('DAP_requests_v1');
+        if (!raw) return;
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr) || arr.length === 0) return;
+        const resp = await fetch(REQUESTS_ENDPOINT + '?action=import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: arr }),
+        });
+        if (resp.ok) {
+          const result = await resp.json();
+          if (result.added > 0) {
+            console.log('Migrated ' + result.added + ' request(s) from localStorage to server.');
+            // Remove the old key so we don't migrate again
+            localStorage.removeItem('DAP_requests_v1');
+          }
+        }
+      } catch (e) {
+        console.warn('migrateLocalRequests failed:', e);
+      }
+    }
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 2 — approveRequest (around line 15466–15474)
+─────────────────────────────────────────────────────────────────────────
+
+FIND these lines inside approveRequest:
+
+      req.status = 'approved';
+      req.approvedAt = new Date().toISOString();
+      req.catalogId = newObj.id;
+      persistSave();
+      savePulseRequests();
+      renderPulseSections();
+
+REPLACE with:
+
+      req.status = 'approved';
+      req.approvedAt = new Date().toISOString();
+      req.catalogId = newObj.id;
+      persistSave();
+      await updateRequestStatus(req.id, 'approved', { catalogId: newObj.id });
+      renderPulseSections();
+
+ALSO change the function signature on line 15432:
+
+    FROM:  function approveRequest(reqId) {
+    TO:    async function approveRequest(reqId) {
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 3 — declineRequest (around line 15484–15492)
+─────────────────────────────────────────────────────────────────────────
+
+FIND:
+
+    function declineRequest(reqId) {
+      const req = pulseRequests.find(r => r.id === reqId);
+      if (!req) return;
+      if (!confirm(`Decline request for ${req.name}?\n\nThe requester won't see this immediately, but the card will disappear from your queue.`)) return;
+      req.status = 'declined';
+      req.declinedAt = new Date().toISOString();
+      savePulseRequests();
+      renderPulseSections();
+    }
+
+REPLACE with:
+
+    async function declineRequest(reqId) {
+      const req = pulseRequests.find(r => r.id === reqId);
+      if (!req) return;
+      if (!confirm(`Decline request for ${req.name}?\n\nThe requester won't see this immediately, but the card will disappear from your queue.`)) return;
+      req.status = 'declined';
+      req.declinedAt = new Date().toISOString();
+      await updateRequestStatus(req.id, 'declined');
+      renderPulseSections();
+    }
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 4 — submitRequestTarget (around line 15573–15604)
+─────────────────────────────────────────────────────────────────────────
+
+This is your in-app form (the one YOU use to add a request on behalf of
+someone). It now POSTs to the server instead of writing to localStorage.
+
+FIND the end of submitRequestTarget, this block:
+
+      const initials = authorName.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      const req = {
+        id: 'req-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        name,
+        ra, dec,
+        type: 'unknown',
+        submittedAt: new Date().toISOString(),
+        author: { name: authorName, initials, affiliation },
+        justification,
+        request: equipment || '—',
+        timing: timing || '',
+        status: 'pending',
+      };
+      pulseRequests.push(req);
+      savePulseRequests();
+      closeRequestTargetForm();
+      renderPulseSections();
+      showSaveIndicator(`✓ Request submitted for ${name}`);
+    }
+
+REPLACE with:
+
+      const payload = {
+        name, ra, dec,
+        author: { name: authorName, affiliation },
+        justification,
+        request: equipment || '',
+        timing: timing || '',
+      };
+      try {
+        const resp = await fetch(REQUESTS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+        pulseRequests.push(data);
+        closeRequestTargetForm();
+        renderPulseSections();
+        showSaveIndicator(`✓ Request submitted for ${name}`);
+      } catch (e) {
+        alert('Could not submit request: ' + e.message);
+      }
+    }
+
+ALSO change the function signature on line 15573:
+
+    FROM:  function submitRequestTarget() {
+    TO:    async function submitRequestTarget() {
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 5 — Auto-refresh on a timer (around line 15640)
+─────────────────────────────────────────────────────────────────────────
+
+You already have a 5-minute refresh interval. Add a faster pull of new
+requests so you see collaborator submissions without reloading the page.
+
+FIND (around line 15639–15640):
+
+    setInterval(tickPulseElapsed, 30 * 1000); // 30s elapsed counter
+    setInterval(renderPulseSections, 5 * 60 * 1000); // 5min full refresh (alt, transit, etc)
+
+REPLACE with:
+
+    setInterval(tickPulseElapsed, 30 * 1000); // 30s elapsed counter
+    setInterval(renderPulseSections, 5 * 60 * 1000); // 5min full refresh (alt, transit, etc)
+
+    // Poll the server for new pending requests every 60s
+    setInterval(async () => {
+      await loadPulseRequests();
+      renderPulseSections();
+    }, 60 * 1000);
+
+
+─────────────────────────────────────────────────────────────────────────
+EDIT 6 — One-time migration call on startup (around line 24450)
+─────────────────────────────────────────────────────────────────────────
+
+Your startup already calls loadPulseRequests() on line 24450. Run the
+migration once first, then load. Because loadPulseRequests is now async,
+make sure whichever function wraps the startup is async OR use .then().
+
+FIND (around line 24450):
+
+      loadPulseRequests();
+
+REPLACE with:
+
+      migrateLocalRequests().then(() => loadPulseRequests()).then(() => {
+        renderPulseSections();
+      });
+
+
+═══════════════════════════════════════════════════════════════════════
+  Deployment
+═══════════════════════════════════════════════════════════════════════
+
+1.  Upload these THREE files to myweb.ttu.edu/dperla/DAP_Catalog/:
+        • requests.php        (new)
+        • request.html        (new)
+        • index.html          (patched)
+
+2.  PHP needs write permission to the directory so it can create
+    requests.json on first POST. On most myweb setups this works out of
+    the box. If you get a 500 error saying "save failed" on the first
+    submission, the directory permissions need adjusting — ask TOSM
+    or set 0775 on the DAP_Catalog folder.
+
+3.  Open https://myweb.ttu.edu/dperla/DAP_Catalog/ in your browser.
+    On first load, any pending requests in your localStorage will be
+    pushed to requests.json on the server. Check your browser console
+    for a "Migrated N request(s)" message.
+
+4.  Send your collaborator:
+        https://myweb.ttu.edu/dperla/DAP_Catalog/request.html
+    They fill it out, hit submit, and it appears in your queue within
+    60 seconds (or immediately if you refresh).
+
+5.  Verify the data file exists:
+        https://myweb.ttu.edu/dperla/DAP_Catalog/requests.json
+    Hitting that URL directly should show the JSON array. (This is also
+    why we'll want a gate before too long — anyone can read this file
+    just by knowing the URL. Not catastrophic since the data isn't
+    sensitive, but worth knowing.)
+
+═══════════════════════════════════════════════════════════════════════
