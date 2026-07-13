@@ -15,10 +15,10 @@ Beyond cataloging, it actively monitors targets of interest, pulling live data a
 ## Technologies Used
 
 - **Vanilla JavaScript / HTML / CSS** — no framework; single-file app architecture for portability and zero build step
-- **TTU MyWeb** — hosting for the live site
-- **Cloudflare Workers** — lightweight proxies for CORS-restricted astronomy services (SIMBAD queries and DSS sky-survey imagery)
-- **Client-side persistence** — catalog state saved in the browser (`localStorage`) <!-- TODO: confirm current save mechanism now that it's on MyWeb -->
-- **External data sources** — SIMBAD (object resolution), Digitized Sky Survey (DSS) images, ZTF and AAVSO (light curves), Gaia (color–magnitude diagrams), NWS (weather alerts), NOAA GOES-19 satellite IR, Open-Meteo (conditions), NEA TESS
+- **TTU MyWeb** hosting for the live site
+- **Cloudflare Workers** lightweight proxies for CORS-restricted astronomy services (SIMBAD queries and DSS sky-survey imagery)
+- **Client-side persistence** catalog state saved in the browser (`localStorage`) <!-- TODO: confirm current save mechanism now that it's on MyWeb -->
+- **External data sources** SIMBAD (object resolution), Digitized Sky Survey (DSS) images, ZTF and AAVSO (light curves), Gaia (color–magnitude diagrams), NWS (weather alerts), NOAA GOES-19 satellite IR, Open-Meteo (conditions), NEA TESS
 
 ## Features
 
